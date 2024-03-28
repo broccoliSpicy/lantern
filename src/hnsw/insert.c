@@ -110,9 +110,12 @@ bool ldb_aminsert(Relation         index,
 
     //  read index header page to know how many pages are already inserted
     hdr_buf = ReadBufferExtended(index, MAIN_FORKNUM, HEADER_BLOCK, RBM_NORMAL, NULL);
+
     LockBuffer(hdr_buf, BUFFER_LOCK_EXCLUSIVE);
     // header page MUST be under WAL since PrepareIndexTuple will update it
     hdr_page = GenericXLogRegisterBuffer(state, hdr_buf, LDB_GENERIC_XLOG_DELTA_IMAGE);
+    UnlockReleaseBuffer(hdr_buf);
+
     hdr = (HnswIndexHeaderPage *)PageGetContents(hdr_page);
     assert(hdr->magicNumber == LDB_WAL_MAGIC_NUMBER);
 
@@ -226,11 +229,6 @@ bool ldb_aminsert(Relation         index,
     if(error != NULL) {
         elog(ERROR, "error freeing usearch index: %s", error);
     }
-
-    // unlock the header page
-    assert(BufferIsValid(hdr_buf));
-    // GenericXLogFinish already marks hdr_buf as dirty
-    UnlockReleaseBuffer(hdr_buf);
 
     ldb_wal_retriever_area_fini(insertstate->retriever_ctx);
     if(insertstate->pq_codebook) pfree(insertstate->pq_codebook);
